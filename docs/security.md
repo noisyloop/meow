@@ -46,6 +46,15 @@ the living room. every port write, every weird CPU state, every DMA
 request gets trapped or emulated by the hypervisor before it means
 anything real.
 
+the same model, by the way, is how you should think about **AI agents in
+sandboxes**: an agent is an inside cat too. it can only act through the
+interfaces deliberately exposed to it (tools, mounted directories,
+network policy), and "escape" means either a bug in the boundary or a
+door someone left open — attached credentials, an over-broad mount, an
+unrestricted network. the lesson transfers exactly: enumerate the doors,
+remove the ones the workload doesn't need, and enforce from the outside,
+because anything the inside can reconfigure isn't a wall.
+
 ## so *could* meow escape?
 
 **not by design, and not plausibly by accident. here is the honest
@@ -166,6 +175,76 @@ bytecode VM.
   the day meow loads `.mbc` files from the disc at runtime (roadmap),
   those files become untrusted input — the VM's checks were written, and
   now fuzzed-by-hand, with that future in mind.
+
+## can meow go online?
+
+**no — and this is verified, not assumed.**
+
+meow contains no network driver, no TCP/IP stack, no sockets, and the
+bytecode VM has no opcode that could ever express "send bytes somewhere."
+you can't ping *from* meow because meow has no concept that a network
+exists. this was tested empirically (2026-07): meow was booted in QEMU
+with an Intel e1000 network adapter **deliberately attached** and a
+packet capture (`-object filter-dump`) recording everything on that
+link, while games were played for the duration. result: **zero frames in
+either direction** — not even a DHCP or ARP attempt. the capture file
+contains only the pcap header. an attached network card is, to meow,
+furniture it never looks at.
+
+### how to make sure it *stays* offline
+
+remember the rule: anything the inside can reconfigure isn't a wall. so
+the guarantee is enforced in layers, outside-in:
+
+1. **detach the adapter** (VirtualBox: Settings → Network → uncheck
+   "Enable Network Adapter"). no device, no door — this is the real
+   guarantee, and it costs meow nothing because meow doesn't use it.
+2. **meow's own design** is the second layer: even with an adapter
+   attached (as in the test above), there is no code that could drive
+   it. an attacker would have to first get arbitrary code execution
+   inside the guest *and bring an entire network driver and stack with
+   them* — and layer 1 means even then there'd be nothing to drive.
+3. **the repository is the tripwire**: any future change that adds
+   networking would have to add a driver, new VM opcodes, and new hooks —
+   loud, reviewable changes in a ~1,900-line codebase, impossible to
+   sneak in as a one-liner.
+
+## if there is ever a multiplayer mode
+
+multiplayer is on the wishlist, but it gets designed as a security
+feature first, because "add networking" is the single biggest attack-
+surface change an OS can make — in both directions:
+
+- **outbound**: it breaks the "cannot go online" guarantee above, so it
+  must never be the default. offline stays the default build; a network
+  build would be a separate, explicit artifact (e.g. `make
+  MEOW_ONLINE=1`), so the ISO you have today never quietly grows a modem.
+- **inbound**: the moment meow *receives* bytes from another machine, a
+  remote peer becomes untrusted input to guest ring 0 — a second front
+  door. every parser bug in the receive path would be remotely reachable.
+
+so the plan of record, when it happens:
+
+1. **start with a serial cable, not the internet.** two VMs joined by a
+   virtual null-modem cable (both VirtualBox and QEMU support piping
+   COM1 between guests, or to a host socket). meow already has a COM1
+   driver; a two-player mouse-chase needs a few bytes per frame. no NIC,
+   no IP stack, no name resolution — the entire network layer is "a wire
+   between two houses," and each cat still can't leave its own.
+2. **fixed-size, dumb messages.** the protocol will be fixed-length
+   frames (positions, one key code, a checksum) with no lengths, no
+   strings, no allocation — nothing to parse means nothing to exploit.
+   the receive path treats the peer as hostile, always: validate, clamp,
+   drop.
+3. **games stay in the bytecode VM.** multiplayer would be exposed to
+   games as one or two new hooks (send state / receive state), keeping
+   the no-pointers, no-memory sandbox intact. a malicious peer should at
+   worst make your opponent's cat teleport, never touch memory.
+4. **internet play, if ever, goes through the host,** not through a
+   guest TCP/IP stack: a tiny relay on the host forwards the serial
+   bytes, so meow itself still contains no network code and the
+   TLS/transport problem lives outside the VM where real, audited
+   libraries exist.
 
 ## checklist: running meow with maximum inside-cat-ness
 
