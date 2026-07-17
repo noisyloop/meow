@@ -1,6 +1,6 @@
 # meow
 
-an operating system for cats.
+an operating system for cats. warning, the .iso should be treated with absolute zero trust unless you are a computer expert, same goes for the VM. Read /docs for more.
 
 meow is a tiny operating system with its own programming language (also
 called meow), its own compiler (`meowc`), and its own games — all of them
