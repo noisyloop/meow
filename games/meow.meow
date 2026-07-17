@@ -1,0 +1,57 @@
+~ meow.meow — the very first meow program
+~ a window opens and says "meow". that's it. that's the game.
+
+clear
+
+~ draw the window frame
+purr top = 8
+purr left = 28
+purr w = 24
+purr h = 7
+
+color 11
+at left, top
+mew "+"
+purr i = 0
+chase i < w - 2 {
+  mew "-"
+  i = i + 1
+}
+mew "+"
+
+purr row = 1
+chase row < h - 1 {
+  at left, top + row
+  mew "|"
+  at left + w - 1, top + row
+  mew "|"
+  row = row + 1
+}
+
+at left, top + h - 1
+mew "+"
+i = 0
+chase i < w - 2 {
+  mew "-"
+  i = i + 1
+}
+mew "+"
+
+~ the window title bar and its very important message
+color 5
+at left + 2, top
+mew " meow.meow "
+color 13
+at left + 9, top + 3
+mew "meow"
+
+color 8
+at left + 3, top + h + 1
+mew "press esc to close"
+
+~ wait for esc, purring gently
+chase 1 {
+  purr k = key
+  pounce k == esc { scratch }
+  nap 16
+}

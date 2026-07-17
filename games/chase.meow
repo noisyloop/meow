@@ -1,0 +1,65 @@
+~ chase.meow — catch the mouse!
+~ arrow keys move the cat. pounce on the mouse to score. esc quits.
+
+clear
+color 11
+at 2, 0
+mew "chase!  arrows move the cat, catch the mouse.  esc quits"
+
+purr cx = 40
+purr cy = 12
+purr mx = random(76) + 2
+purr my = random(20) + 3
+purr score = 0
+
+~ draw the arena floor line
+color 8
+at 0, 1
+purr i = 0
+chase i < 80 {
+  mew "-"
+  i = i + 1
+}
+
+purr playing = 1
+chase playing {
+  ~ draw score, mouse, cat
+  color 14
+  at 2, 24
+  mew "mice caught: ", score, "   "
+  color 7
+  at mx, my
+  mew "m"
+  color 13
+  at cx, cy
+  mew "C"
+
+  purr k = key
+  pounce k {
+    ~ erase the cat before it moves
+    at cx, cy
+    mew " "
+    pounce k == up    { cy = cy - 1 }
+    pounce k == down  { cy = cy + 1 }
+    pounce k == left  { cx = cx - 1 }
+    pounce k == right { cx = cx + 1 }
+    pounce k == esc   { playing = 0 }
+
+    ~ keep the cat in the arena
+    pounce cx < 0  { cx = 0 }
+    pounce cx > 79 { cx = 79 }
+    pounce cy < 2  { cy = 2 }
+    pounce cy > 23 { cy = 23 }
+  }
+
+  ~ caught it?
+  pounce cx == mx and cy == my {
+    score = score + 1
+    at mx, my
+    mew " "
+    mx = random(76) + 2
+    my = random(20) + 3
+  }
+
+  nap 16
+}
