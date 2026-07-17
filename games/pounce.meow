@@ -1,0 +1,67 @@
+~ pounce.meow — a reflex game for quick paws
+~ a mouse runs back and forth. press space when it is under the paw. esc quits.
+
+clear
+color 11
+at 2, 0
+mew "pounce!  press space when the mouse is under the paw.  esc quits"
+
+purr left = 20
+purr w = 40
+purr mid = left + w / 2
+
+color 13
+at mid, 10
+mew "\\/"
+
+~ draw the track
+color 8
+at left, 12
+purr i = 0
+chase i < w {
+  mew "."
+  i = i + 1
+}
+
+purr pos = 0
+purr dir = 1
+purr score = 0
+purr misses = 0
+
+purr playing = 1
+chase playing {
+  color 7
+  at left + pos, 12
+  mew "m"
+
+  purr k = key
+  pounce k == esc { playing = 0 }
+  pounce k == space {
+    purr hit = pos + left
+    pounce hit >= mid - 1 and hit <= mid + 2 {
+      score = score + 1
+      color 10
+      at mid - 3, 8
+      mew "purr!   "
+    } hiss {
+      misses = misses + 1
+      color 12
+      at mid - 3, 8
+      mew "hiss...  "
+    }
+  }
+
+  color 14
+  at 2, 24
+  mew "pounces: ", score, "   whiffs: ", misses, "   "
+
+  nap 30
+
+  ~ erase and step the mouse
+  at left + pos, 12
+  color 8
+  mew "."
+  pos = pos + dir
+  pounce pos >= w - 1 { dir = -1 }
+  pounce pos <= 0 { dir = 1 }
+}
