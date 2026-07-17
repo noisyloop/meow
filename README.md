@@ -108,6 +108,10 @@ Makefile, `make run`. it appears in the boot menu.
 
 ## how it works
 
+the full walkthrough — boot chain, kernel, compiler, bytecode format, and
+an honest audit of every dependency and how far it can be trusted — lives
+in [docs/how-it-works.md](docs/how-it-works.md). the short version:
+
 ```
 boot/boot.asm     2 KB El Torito boot stage: loads the kernel from the CD,
                   enables A20, enters 32-bit protected mode  (no GRUB)
