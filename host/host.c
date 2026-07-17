@@ -32,6 +32,11 @@ static void term_clear(void)
 
 static void term_at(int x, int y)
 {
+    /* clamp to the 80x25 meow screen, same as the kernel does */
+    if (x < 0) x = 0;
+    if (x > 79) x = 79;
+    if (y < 0) y = 0;
+    if (y > 24) y = 24;
     printf("\x1b[%d;%dH", y + 1, x + 1);
     fflush(stdout);
 }

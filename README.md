@@ -128,6 +128,13 @@ memory map: boot stage at `0x7C00`, kernel at `0x8400`, stack at
 `0x90000`, VGA text buffer at `0xB8000`. no interrupts, no paging, no
 processes — a cat does one thing at a time, intensely.
 
+## security
+
+meow is an inside cat: it runs in a VM and cannot open the door from the
+inside. what that means precisely — the sandbox layers, whether escape is
+possible, the full list of "hardware" meow touches, and the findings of
+its first security review — is in [docs/security.md](docs/security.md).
+
 ## roadmap
 
 - native code generation (`meowc build --exe`) for standalone `.exe` /

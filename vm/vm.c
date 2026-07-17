@@ -48,7 +48,7 @@ int vm_run(const mu8 *image, int len, const vm_hooks *h)
             return -1;
         slen[i] = rd16(image + pos);
         pos += 2;
-        if (pos + slen[i] > len)
+        if ((int)slen[i] > len - pos)
             return -1;
         strs[i] = image + pos;
         pos += slen[i];
@@ -57,7 +57,8 @@ int vm_run(const mu8 *image, int len, const vm_hooks *h)
         return -1;
     codelen = rd32(image + pos);
     pos += 4;
-    if (pos + (int)codelen > len)
+    /* compare in unsigned space: a huge codelen must not wrap negative */
+    if (codelen > (mu32)(len - pos))
         return -1;
     code = image + pos;
 
