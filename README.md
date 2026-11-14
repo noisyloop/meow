@@ -128,6 +128,126 @@ memory map: boot stage at `0x7C00`, kernel at `0x8400`, stack at
 `0x90000`, VGA text buffer at `0xB8000`. no interrupts, no paging, no
 processes — a cat does one thing at a time, intensely.
 
+## meow-usb
+
+a second build of meow for older legacy-BIOS PCs (roughly early-2000s
+hardware and before) that boot from a USB stick. same kernel, same VM,
+same games — only the code in `usb/` is different. no CD support here;
+the ISO build above is untouched.
+
+```sh
+make usb        # builds build/meow-usb.img (1 MiB raw disk image)
+make usb-run    # boots it in QEMU as a 486 with 32 MB of RAM
+```
+
+### flash, plug in, boot
+
+1. `make usb`
+2. open balenaEtcher, pick `build/meow-usb.img`, pick your USB stick,
+   flash. (or: `sudo dd if=build/meow-usb.img of=/dev/sdX bs=1M conv=fsync`
+   — check `/dev/sdX` twice, it erases the stick.) Etcher may say the
+   image "doesn't look bootable" for an operating system it doesn't
+   know; continue anyway.
+3. plug the stick into the old PC, power on, open the BIOS boot menu and
+   choose the USB device. if the BIOS offers USB-HDD, USB-ZIP and
+   USB-FDD modes, any of them should work; try USB-HDD first.
+4. if the keyboard is a USB one, turn on "Legacy USB Support" (sometimes
+   "USB Keyboard Support") in BIOS setup.
+
+a USB mass-storage emulator that serves `meow-usb.img` works the same way.
+
+### image layout
+
+```
+byte offset   sector   loaded at   what
+-----------   ------   ---------   ------------------------------------------
+0x000000      0        0x7C00      jmp + nop
+0x000003                           FAT-style BPB (for floppy/ZIP emulation)
+0x00003E                           boot code: read sectors 1..N via INT 13h
+0x0001B8                           disk signature "MEOW"
+0x0001BE                           partition table: 1 active entry, type 0xDA,
+                                   LBA 1 .. end of image
+0x0001FE                           55 AA
+0x000200      1-3      0x7E00      stage 2: A20, GDT, protected mode
+0x000800      4..      0x8400      kernel (flat binary, about 7 KB)
+  ...                              zero padding
+0x100000      2048                 end of image (1 MiB)
+```
+
+the first 2048 bytes mirror the CD boot stage (which is also 2048 bytes
+at `0x7C00`), so the kernel links at `0x8400` in both builds with the
+same `kernel/kernel.ld`.
+
+### what you see while it boots
+
+one character per stage, printed with the BIOS, then the welcome screen:
+
+| char | meaning                                              |
+|------|------------------------------------------------------|
+| `M`  | boot sector is running                               |
+| `L`  | reading with INT 13h extensions (LBA)                |
+| `C`  | reading with CHS, geometry from the BIOS             |
+| `K`  | stage 2 and kernel are loaded                        |
+| `A`  | A20 line is on                                       |
+| `P`  | entering protected mode                              |
+
+a healthy boot flashes `MLKAP` or `MCKAP`. on failure it prints `!` and a
+letter, and stops:
+
+| error | meaning                                                         |
+|-------|-----------------------------------------------------------------|
+| `!G`  | no LBA extensions and the BIOS reported no disk geometry        |
+| `!D`  | a sector could not be read (3 tries with disk resets, LBA then CHS) |
+| `!S`  | stage 2 signature missing — image truncated or badly flashed    |
+| `!A`  | the A20 line could not be enabled                               |
+
+### what is different from the ISO build
+
+- **boot** (`usb/boot.asm`): MBR instead of El Torito. keeps the BIOS
+  drive number from `DL`, checks INT 13h `AH=41h` and reads with
+  `AH=42h`, otherwise (or if that fails) CHS `AH=02h` with geometry from
+  `AH=08h`. one sector per read, so nothing crosses a 64 KB boundary;
+  three tries per sector with a disk reset between.
+- **A20**: test first, then INT 15h `AX=2401h`, then the keyboard
+  controller, then port `0x92` — re-testing after each step.
+- **cpu**: the kernel is compiled `-march=i486 -mno-sse -mno-mmx
+  -mno-sse2` and uses no CPUID. (the ISO build uses the compiler's
+  default, which emits `cmov` and so needs a newer CPU.)
+- **keyboard** (`usb/kernel_usb.c`): the controller is flushed at start
+  and every poll is bounded, so a missing or stuck controller can't hang
+  the cat. it only reads ports `0x60`/`0x64` and never sends controller
+  commands, which is what BIOS USB keyboard emulation supports.
+- no assumptions about RAM above 1 MB, ACPI, APIC or PCI; VGA text
+  80x25 at `0xB8000` only.
+
+`usb/kernel_usb.c` does not copy the kernel: it `#include`s
+`kernel/kernel.c` as-is and swaps in its own keyboard poll and a `kmain`
+that flushes the keyboard first.
+
+### testing in QEMU
+
+all three as a 486 with 32 MB. press a key at the welcome screen, then
+`1` to check the keyboard.
+
+```sh
+# as a raw hard disk (this is what `make usb-run` does)
+qemu-system-i386 -cpu 486 -m 32 -drive file=build/meow-usb.img,format=raw
+
+# as a USB stick
+qemu-system-i386 -cpu 486 -m 32 -usb \
+    -drive if=none,id=stick,file=build/meow-usb.img,format=raw \
+    -device usb-storage,drive=stick,bootindex=0
+
+# as a floppy — exercises the BPB / CHS path (prints MCKAP)
+qemu-system-i386 -cpu 486 -m 32 -fda build/meow-usb.img
+```
+
+without a display, add `-display none -serial stdio`: the kernel mirrors
+its text to COM1, so `welcome to meow` on the terminal means it booted.
+
+the original build is checked the same way it always was: `make` and
+`make run`. adding meow-usb changes no file the ISO is built from.
+
 ## security
 
 meow is an inside cat: it runs in a VM and cannot open the door from the

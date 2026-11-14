@@ -3,6 +3,8 @@
 #   make            build build/meow.iso
 #   make run        boot it in QEMU
 #   make meowc      just the compiler / host player
+#   make usb        build build/meow-usb.img (USB stick, old legacy-BIOS PCs)
+#   make usb-run    boot that in QEMU as a 486 with 32 MB
 #   make clean
 
 BUILD   := build
@@ -66,7 +68,46 @@ $(BUILD):
 run: $(BUILD)/meow.iso
 	qemu-system-i386 -cdrom $(BUILD)/meow.iso
 
+# ---- meow-usb: raw disk image for old legacy-BIOS PCs ----------------
+# Same kernel sources, same link script, same games. Only usb/ differs:
+# an MBR boot stage instead of El Torito, and a kernel wrapper compiled
+# for a plain i486 with a keyboard poll that cannot hang.
+USB         := $(BUILD)/usb
+USB_SECTORS := 2048
+USB_KCFLAGS := $(KCFLAGS) -march=i486 -mno-sse -mno-mmx -mno-sse2 \
+               -Wno-unused-function
+
+$(USB):
+	mkdir -p $(USB)
+
+$(USB)/kernel.o: usb/kernel_usb.c kernel/kernel.c vm/vm.h $(BUILD)/games.h | $(USB)
+	$(CC) $(USB_KCFLAGS) -c $< -o $@
+
+$(USB)/kvm.o: vm/vm.c vm/vm.h | $(USB)
+	$(CC) $(USB_KCFLAGS) -c $< -o $@
+
+$(USB)/kernel.bin: $(BUILD)/entry.o $(USB)/kernel.o $(USB)/kvm.o kernel/kernel.ld
+	ld -m elf_i386 -T kernel/kernel.ld -o $(USB)/kernel.elf \
+		$(BUILD)/entry.o $(USB)/kernel.o $(USB)/kvm.o
+	objcopy -O binary $(USB)/kernel.elf $@
+
+$(USB)/boot.bin: usb/boot.asm $(USB)/kernel.bin
+	nasm -f bin -DIMAGE_SECTORS=$(USB_SECTORS) \
+		-DKERNEL_SECTORS=$$(( ($$(wc -c < $(USB)/kernel.bin) + 511) / 512 )) \
+		$< -o $@
+
+$(BUILD)/meow-usb.img: $(USB)/boot.bin $(USB)/kernel.bin
+	cat $(USB)/boot.bin $(USB)/kernel.bin > $@.tmp
+	truncate -s $$(( $(USB_SECTORS) * 512 )) $@.tmp
+	mv $@.tmp $@
+	@echo "purr: $@ is ready"
+
+usb: $(BUILD)/meow-usb.img
+
+usb-run: $(BUILD)/meow-usb.img
+	qemu-system-i386 -cpu 486 -m 32 -drive file=$(BUILD)/meow-usb.img,format=raw
+
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all run clean meowc
+.PHONY: all run clean meowc usb usb-run
